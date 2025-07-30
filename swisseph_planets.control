@@ -1,0 +1,5 @@
+# swisseph_planets.control
+comment = 'Planètes, Asc, MC… via Swiss Ephemeris'
+default_version = '1.0'
+module_pathname = '$libdir/swisseph_planets'
+relocatable = true

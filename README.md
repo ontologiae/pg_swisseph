@@ -1,3 +1,5 @@
+Still in progress, but usable
+
 For Debian/Ubuntu :
 
 

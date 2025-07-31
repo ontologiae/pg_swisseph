@@ -40,8 +40,9 @@ PG_MODULE_MAGIC;
 /* ------------------------------------------------------------------ */
 #define N_PLANETS    21        /* Sun … Pluto (SwissEph 0–9)     */
 #define N_URANIAN  9         /* Ceres, Pallas, Juno, Vesta, Chiron, Pholus, Varuna, Orcus, Haumea */
+#define N_ASTEROIDS 3         /* 40–48 (SwissEph 40–48)        */
 #define N_ANGULAR     4         /* ASC, DSC, MC, IC               */
-#define NB_RESULTS   (N_PLANETS + N_ANGULAR + N_URANIAN)
+#define NB_RESULTS   (N_PLANETS + N_ANGULAR + N_URANIAN + N_ASTEROIDS)
 
 /* Identifiants arbitraires (> 10000) pour les angles */
 #define ID_ASC 10001
@@ -49,30 +50,195 @@ PG_MODULE_MAGIC;
 #define ID_MC  10003
 #define ID_IC  10004
 
+
+/*
+
+ 
+ SE_SUN          0        SE_MOON         1       
+ SE_MERCURY      2        SE_VENUS        3       
+ SE_MARS         4        SE_JUPITER      5       
+ SE_SATURN       6        SE_URANUS       7       
+ SE_NEPTUNE      8        SE_PLUTO        9       
+ SE_MEAN_NODE    10       SE_TRUE_NODE    11
+ SE_MEAN_APOG    12       SE_OSCU_APOG    13    
+ SE_EARTH        14       SE_CHIRON       15      
+ SE_PHOLUS       16       SE_CERES        17      
+ SE_PALLAS       18       SE_JUNO         19      
+ SE_VESTA        20       SE_INTP_APOG    21      
+ SE_INTP_PERG    22     SE_NPLANETS     23      
+
+ SE_PLMOON_OFFSET   9000
+ SE_AST_OFFSET   10000
+ SE_VARUNA   (SE_AST_OFFSET + 20000)
+
+ SE_FICT_OFFSET  	40
+ SE_FICT_OFFSET_1  	39
+ SE_FICT_MAX  	       999 
+ SE_NFICT_ELEM           15
+
+ SE_COMET_OFFSET 1000
+
+ SE_NALL_NAT_POINTS      (SE_NPLANETS + SE_NFICT_ELEM)
+
+ SE_CUPIDO       	40  SE_HADES        	41
+ SE_ZEUS         	42  SE_KRONOS       	43
+ SE_APOLLON      	44  SE_ADMETOS      	45
+ SE_VULKANUS     	46  SE_POSEIDON     	47
+ SE_ISIS         	48  SE_NIBIRU       	49
+ SE_NEPTUNE_LEVERRIER    5
+ SE_NEPTUNE_ADAMS        52  SE_PLUTO_LOWELL         53
+ SE_PLUTO_PICKERING      54 SE_VULCAN      		55
+ SE_WHITE_MOON  	 56  SE_PROSERPINA  		57
+ SE_WALDEMATH  		58
+ * */
+
+
+#define YEAR_EARTH 365.2421905166
+#define PERIOD_BACCHUS      720.01539479335631160550                   // années        
+#define ROT_SPEED_BACCHUS   (360.0 / (PERIOD_BACCHUS * YEAR_EARTH))     /* ° par jour */
+
+#define JD0_BACCHUS 2203540.5                 /* 0° Bélier pour Bacchus */
+#define JD0_APOLLON  2355952.330904602        /* 0° Bélier pour Apollon */
+
+#define RADIUS_BACCHUS      pow(PERIOD_BACCHUS, 2.0/3.0)
+
+#define PERIOD_APOLLON      612.84
+#define RADIUS_APOLLON      pow(PERIOD_APOLLON, 2.0/3.0)
+#define ROT_SPEED_APOLLON   360.0/(612.84*YEAR_EARTH)     /* ° par jour */
+
+#define PERIOD_PROSERPINE   374.99706648423204722107
+#define RADIUS_PROSERPINE   pow(PERIOD_PROSERPINE, 2.0/3.0)
+#define ROT_SPEED_PROSERPINE   0.002628413515156272     /* ° par jour */
+#define JD0_PROSERPINE  2282637.2446808508     /* 0° Bélier pour Proserpine */
+
+
+
+static double norm360(double a) {
+	a = fmod(a, 360.0);
+	return (a < 0.0) ? a + 360.0 : a;
+}
+
+static double bacchus_helio(double jd) {
+	double lon;
+	if (jd > JD0_BACCHUS)
+		lon = 360.0 - (jd - JD0_BACCHUS) * ROT_SPEED_BACCHUS;
+	else
+		lon = 360.0 - (JD0_BACCHUS - jd) * ROT_SPEED_BACCHUS;
+
+	return norm360(lon);
+}
+
+static double apollon_helio(double jd) {
+	double lon;
+	if (jd > JD0_APOLLON)
+		lon = norm360( (jd - JD0_APOLLON) * ROT_SPEED_APOLLON);
+	else
+		lon = norm360( (JD0_APOLLON - jd) * ROT_SPEED_APOLLON);
+
+	return norm360(lon);
+}
+
+static double proserpine_helio(double jd) {
+	double lon;
+	if (jd > JD0_PROSERPINE)
+		lon = norm360( (jd - JD0_PROSERPINE) * ROT_SPEED_PROSERPINE);
+	else
+		lon = norm360( (JD0_PROSERPINE - jd) * ROT_SPEED_PROSERPINE);
+
+	return norm360(lon);
+}
+
+static double lambda_geo_fast(double jd, double body_lat_helio, int32 iflag_se, double body_radius ) {
+	char   serr[256];
+	double xx_earth[6];
+
+	/* Terre héliocentrique, plan de l’écliptique */
+	swe_calc(jd, SE_EARTH, iflag_se | SEFLG_HELCTR  | SEFLG_SWIEPH, xx_earth, serr);
+
+	double lambda_earth = norm360(xx_earth[0]);      /* degrés       */
+
+	/* ---------------- formule vectorielle dans le plan ------------ */
+	const double D2R = M_PI / 180.0;
+	double lam_h = body_lat_helio;
+
+	double x = body_radius * cos(lam_h * D2R) - cos(lambda_earth * D2R);
+	double y = body_radius * sin(lam_h * D2R) - sin(lambda_earth * D2R);
+
+	double lam_g = atan2(y, x) / D2R;
+	if (lam_g < 0) lam_g += 360.0;
+	ereport(INFO,errmsg("LOG lambda_geo_fast lambda_earth=%f ;  jd=%f ; lambda_helio=%f ; geocentric=%f",lambda_earth, jd, body_lat_helio, lam_g ));
+
+
+	return lam_g;          /* longitude géocentrique (°) */
+
+}
+
+/*static double lambda_geo_fast(double jd, double lambda_helio, int32 iflag_se) {
+	double xx_earth[6];              // sortie SE       
+	char   serr[256];
+
+	// λ⊕ héliocentrique (ellipse de la Terre) 
+	swe_calc(jd, SE_EARTH, iflag_se | SEFLG_HELCTR , xx_earth, serr);
+	double lambda_earth = norm360(xx_earth[0]);    // longitude Terre 
+
+	ereport(INFO,errmsg("LOG lambda_geo_fast lambda_earth=%f ;  jd=%f ; lambda_helio=%f ; geocentric=%f",lambda_earth, jd, lambda_helio, norm360(lambda_helio +  lambda_earth) ));
+
+	return norm360(lambda_helio + 180.0 - lambda_earth);
+
+
+}*/
+
+
+/*void bacchus_geo_vector(double jd, int32 iflag_se, double *plon, double *plat, double *pdist) {
+	double xx_ast[6], xx_earth[6], rg[3];
+	char   serr[256];
+
+	// 2063 = numéro MPC de Bacchus ; dans SE : SE_AST_OFFSET + nbr   
+	int32 ipl_bacchus = SE_AST_OFFSET + 2063;
+
+	// Héliocentrique écliptique rect. (x,y,z) du corps et de la Terre 
+	swe_calc(jd, ipl_bacchus, iflag_se | SEFLG_HELCTR | SEFLG_ECL, xx_ast, serr);
+	swe_calc(jd, SE_EARTH,     iflag_se | SEFLG_HELCTR | SEFLG_ECL, xx_earth, serr);
+
+	// Passage hélioc. → géoc. : soustraction vecteurs                 
+	rg[0] = xx_ast[0] - xx_earth[0];
+	rg[1] = xx_ast[1] - xx_earth[1];
+	rg[2] = xx_ast[2] - xx_earth[2];
+
+	double lon = atan2(rg[1], rg[0]) * 180.0 / M_PI;
+	if (lon < 0) lon += 360.0;
+
+	double lat  = atan2(rg[2], hypot(rg[0], rg[1])) * 180.0 / M_PI;
+	double dist = sqrt(rg[0]*rg[0] + rg[1]*rg[1] + rg[2]*rg[2]);
+
+	if (plon)  *plon  = lon;
+	if (plat)  *plat  = lat;
+	if (pdist) *pdist = dist;
+}*/
+
+
 /* Structure conservée entre deux appels d’un SRF */
 typedef struct
 {
-    TimestampTz ts;
-    int32   nrows;             /* = NB_RESULTS                    */
-    int32   current;           /* index courant 0…nrows-1         */
+	TimestampTz ts;
+	int32   nrows;             /* = NB_RESULTS                    */
+	int32   current;           /* index courant 0…nrows-1         */
 
-    double  results[NB_RESULTS][4];
-    /* [i][0] = idplanet
-       [i][1] = lon (deg)
-       [i][2] = lat (deg)
+	double  results[NB_RESULTS][4];
+	/* [i][0] = idplanet
+	   [i][1] = lon (deg)
+	   [i][2] = lat (deg)
        [i][3] = dist (AU) – inutilisé pour ASC/… -> 0  */
 } calc_state;
 
 /* ------------------------------------------------------------------ */
 /*  Conversion Timestamp → Julian Day UT                              */
 /* ------------------------------------------------------------------ */
-static double
-timestamp_to_jdut(TimestampTz ts)
-{
+static double timestamp_to_jdut(TimestampTz ts) {
     struct pg_tm tm;
     fsec_t  fsec;
     int     tz;
-    double  jut, jd_ut;
+    double  jd_ut;
     int     rc;
 
     rc = timestamp2tm(ts, &tz, &tm, &fsec, NULL, NULL);
@@ -99,47 +265,54 @@ timestamp_to_jdut(TimestampTz ts)
 /* ------------------------------------------------------------------ */
 /*  Pré-calcul de toutes les positions pour un appel                  */
 /* ------------------------------------------------------------------ */
-static void
-compute_positions(calc_state *st, double lat_deg, double lon_deg)
-{
+static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     int i;
     double jd_ut = timestamp_to_jdut(st->ts);
     int32  iflag = SEFLG_SWIEPH | SEFLG_SPEED | SEFLG_TOPOCTR | SE_SPLIT_DEG_ZODIACAL;    /* éphémerides suisses, vitesses */
 
     char serr[AS_MAXCH];          /* buffer erreur SwissEph */
 
+    int asteroids[20] = {
+	    SE_SUN,SE_MOON,SE_MARS,SE_MERCURY,SE_JUPITER,SE_VENUS,SE_SATURN,SE_URANUS,SE_NEPTUNE,SE_PLUTO,SE_VESTA,SE_VARUNA
+		,SE_VULCAN,SE_CHIRON,SE_CERES,SE_JUNO,SE_MEAN_APOG,SE_PHOLUS,SE_PALLAS,SE_POSEIDON
+    };
+    
+
+
     swe_set_topo(lon_deg, lat_deg, 0.0); /* position géographique pour les calculs, au niveau de la mer */
     /* 1) Planètes 0–9 ------------------------------------------------ */
-    for (i = 0; i < N_PLANETS; i++)
-    {
+    for (i = 0; i < 20; i++) {
+
         double xret[6];
         if (swe_calc_ut(jd_ut, i, iflag, xret, serr) == ERR)
             ereport(ERROR, (errmsg("we_calc_ut error: %s", serr)));
 
-        st->results[i][0] = (double)i;      /* idplanet 0 … 9           */
+        st->results[i][0] = (double)asteroids[i];      /* idplanet 0 … 9           */
         st->results[i][1] = swe_degnorm(xret[0]);  /* longitude          */
         st->results[i][2] = xret[1];              /* latitude            */
         st->results[i][3] = xret[3];              /* distance speed (AU)       */
     }
 
-   for (i = 40; i < 49; i++) // Astéroides 40–48
-    {
+/*   for (i = 0; i < 11  ; i++) { // Astéroides 40–48
+    
         double xret[6];
         if (swe_calc_ut(jd_ut, i, iflag, xret, serr) == ERR)
             ereport(ERROR, (errmsg("we_calc_ut error: %s", serr)));
-	// on met un -19 pour commencer à 21 jusqu'à 29
-        st->results[i-19][0] = (double)i;      /* idplanet 0 … 9           */
-        st->results[i-19][1] = swe_degnorm(xret[0]);  /* longitude          */
-        st->results[i-19][2] = xret[1];              /* latitude            */
-        st->results[i-19][3] = xret[3];              /* distance speed (AU)       */
+        st->results[i][0] = (double)asteroids[i];      // idplanet 21 .. 29           
+        st->results[i][1] = swe_degnorm(xret[0]);  // longitude          
+        st->results[i][2] = xret[1];              // latitude            
+        st->results[i][3] = xret[3];              // distance speed (AU)       
     }
-
+*/
 
     /* 2) Ascendant / MC ---------------------------------------------- */
     double cusps[13];      /* non utilisé ici, mais requis       */
     double ascmc[10];
     if (swe_houses_ex(jd_ut, iflag, lat_deg, lon_deg, 'P', cusps, ascmc) == ERR)
         ereport(ERROR, (errmsg("swe_houses_ex failed")));
+
+
+
 
     /* Ascendant, MC, leurs oppositions */
     double asc = swe_degnorm(ascmc[SE_ASC]);
@@ -160,7 +333,7 @@ compute_positions(calc_state *st, double lat_deg, double lon_deg)
     st->results[base+1][2] = 0.0;
     st->results[base+1][3] = 0.0;
 
-    /* MC */
+    /* MC */	
     st->results[base+2][0] = ID_MC;
     st->results[base+2][1] = mc;
     st->results[base+2][2] = 0.0;
@@ -171,6 +344,41 @@ compute_positions(calc_state *st, double lat_deg, double lon_deg)
     st->results[base+3][1] = ic;
     st->results[base+3][2] = 0.0;
     st->results[base+3][3] = 0.0;
+
+    //Bacchus
+    iflag = SEFLG_SWIEPH | SEFLG_SPEED;   // vous pouvez ajouter  
+                                            // SEFLG_NONUT, etc.    
+    double lon_bacchus = lambda_geo_fast(jd_ut, bacchus_helio(jd_ut), iflag, RADIUS_BACCHUS);
+    double lon_apollon = lambda_geo_fast(jd_ut, apollon_helio(jd_ut), iflag, RADIUS_APOLLON);
+    double lon_proserpine = lambda_geo_fast(jd_ut, proserpine_helio(jd_ut), iflag, RADIUS_PROSERPINE);
+
+    //int asteroids2[3] = {25, 26, 27};// Bacchus, apollon, proserpine
+
+
+    base = 24;
+        /* bacchus */
+    st->results[base+1][0] = 25;
+    st->results[base+1][1] = lon_bacchus;
+    st->results[base+1][2] = 0.0;
+    st->results[base+1][3] = 0.0;
+
+           /* apollon */
+    st->results[base+2][0] = 26;
+    st->results[base+2][1] = lon_apollon;
+    st->results[base+2][2] = 0.0;
+    st->results[base+2][3] = 0.0;
+
+
+    /* proserpine */
+
+    st->results[base+3][0] = 27;
+    st->results[base+3][1] = lon_proserpine;
+    st->results[base+3][2] = 0.0;
+    st->results[base+3][3] = 0.0;
+
+
+	
+
 }
 
 /* ------------------------------------------------------------------ */
@@ -178,15 +386,12 @@ compute_positions(calc_state *st, double lat_deg, double lon_deg)
 /* ------------------------------------------------------------------ */
 PG_FUNCTION_INFO_V1(sw_planet_positions);
 
-Datum
-sw_planet_positions(PG_FUNCTION_ARGS)
-{
+Datum sw_planet_positions(PG_FUNCTION_ARGS) {
     FuncCallContext   *funcctx;
     calc_state        *st;
 
     /* première entrée ------------------------------------------------ */
-    if (SRF_IS_FIRSTCALL())
-    {
+    if (SRF_IS_FIRSTCALL()) {
         MemoryContext   oldcontext;
 
         /* vérification des arguments */
@@ -234,8 +439,7 @@ sw_planet_positions(PG_FUNCTION_ARGS)
     funcctx = SRF_PERCALL_SETUP();
     st      = (calc_state *) funcctx->user_fctx;
 
-    if (st->current < st->nrows)
-    {
+    if (st->current < st->nrows) {
         Datum       values[5];
         bool        nulls[5] = {false,false,false,false,false};
 
@@ -245,14 +449,11 @@ sw_planet_positions(PG_FUNCTION_ARGS)
         values[3] = Float8GetDatum(st->results[st->current][2]);
         values[4] = Float8GetDatum(st->results[st->current][3]);
 
-        HeapTuple   tuple = heap_form_tuple(funcctx->tuple_desc,
-                                            values, nulls);
+        HeapTuple   tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
         st->current++;
 
         SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
-    }
-    else
-    {
+    } else {
         SRF_RETURN_DONE(funcctx);
     }
 }

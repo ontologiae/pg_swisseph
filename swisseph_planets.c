@@ -42,7 +42,7 @@ PG_MODULE_MAGIC;
 #define N_URANIAN  9         /* Ceres, Pallas, Juno, Vesta, Chiron, Pholus, Varuna, Orcus, Haumea */
 #define N_ASTEROIDS 3         /* 40–48 (SwissEph 40–48)        */
 #define N_ANGULAR     4         /* ASC, DSC, MC, IC               */
-#define NB_RESULTS   (N_PLANETS + N_ANGULAR + N_URANIAN + N_ASTEROIDS)
+#define NB_RESULTS   (N_PLANETS + N_ANGULAR + N_URANIAN + N_ASTEROIDS) -4
 
 /* Identifiants arbitraires (> 10000) pour les angles */
 #define ID_ASC 10001
@@ -144,7 +144,7 @@ static double proserpine_helio(double jd) {
 		lon = norm360( (jd - JD0_PROSERPINE) * ROT_SPEED_PROSERPINE);
 	else
 		lon = norm360( (JD0_PROSERPINE - jd) * ROT_SPEED_PROSERPINE);
-	ereport(INFO,errmsg("LOG proserpine_helio jd=%f ; jd0=%f ; lon=%f, norm lon=%f", jd, JD0_PROSERPINE, lon, norm360(lon) ));
+	//ereport(INFO,errmsg("LOG proserpine_helio jd=%f ; jd0=%f ; lon=%f, norm lon=%f", jd, JD0_PROSERPINE, lon, norm360(lon) ));
 	return norm360(lon);
 }
 
@@ -166,7 +166,7 @@ static double lambda_geo_fast(double jd, double body_lat_helio,  double body_rad
 
 	double lam_g = atan2(y, x) / D2R;
 	if (lam_g < 0) lam_g += 360.0;
-	ereport(INFO,errmsg("LOG lambda_geo_fast lambda_earth=%f ;  jd=%f ; lambda_helio=%f ; geocentric=%f;",lambda_earth, jd, body_lat_helio, lam_g ));
+	//ereport(INFO,errmsg("LOG lambda_geo_fast lambda_earth=%f ;  jd=%f ; lambda_helio=%f ; geocentric=%f;",lambda_earth, jd, body_lat_helio, lam_g ));
 
 
 	return lam_g;          /* longitude géocentrique (°) */
@@ -262,32 +262,38 @@ static double timestamp_to_jdut(TimestampTz ts) {
     return jd_ut;
 }
 
+#define BODIES_COUNT 24
 /* ------------------------------------------------------------------ */
 /*  Pré-calcul de toutes les positions pour un appel                  */
 /* ------------------------------------------------------------------ */
 static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     int i;
     double jd_ut = timestamp_to_jdut(st->ts);
-    int32  iflag = SEFLG_SWIEPH | SEFLG_SPEED | SEFLG_TOPOCTR | SE_SPLIT_DEG_ZODIACAL;    /* éphémerides suisses, vitesses */
+    int32  iflag = SEFLG_SWIEPH | SEFLG_SPEED | SEFLG_TOPOCTR ;    /* éphémerides suisses, vitesses */
 
     char serr[AS_MAXCH];          /* buffer erreur SwissEph */
 
-    int asteroids[20] = {
-	    SE_SUN,SE_MOON,SE_MARS,SE_MERCURY,SE_JUPITER,SE_VENUS,SE_SATURN,SE_URANUS,SE_NEPTUNE,SE_PLUTO,SE_VESTA,SE_VARUNA
-		,SE_VULCAN,SE_CHIRON,SE_CERES,SE_JUNO,SE_MEAN_APOG,SE_PHOLUS,SE_PALLAS,SE_POSEIDON
+    int bodies[BODIES_COUNT] = {
+	    SE_SUN,SE_MOON,SE_MARS,SE_MERCURY,SE_JUPITER,SE_VENUS,SE_SATURN,SE_URANUS,SE_NEPTUNE,SE_PLUTO
+		    ,SE_VESTA,SE_VARUNA
+		,SE_VULCAN,SE_CHIRON
+		,SE_CERES,SE_JUNO,SE_MEAN_APOG,SE_PHOLUS,SE_PALLAS,SE_POSEIDON
+		,SE_MEAN_NODE, SE_TRUE_NODE
+		,SE_AST_OFFSET + 136199 // Eris 
     };
     
 
 
     swe_set_topo(lon_deg, lat_deg, 0.0); /* position géographique pour les calculs, au niveau de la mer */
     /* 1) Planètes 0–9 ------------------------------------------------ */
-    for (i = 0; i < 20; i++) {
+    for (i = 0; i < BODIES_COUNT; i++) {
 
         double xret[6];
-        if (swe_calc_ut(jd_ut, i, iflag, xret, serr) == ERR)
+        if (swe_calc_ut(jd_ut, bodies[i], iflag, xret, serr) == ERR)
             ereport(ERROR, (errmsg("we_calc_ut error: %s", serr)));
+	//ereport(INFO,errmsg("LOG swe_calc_ut jd=%f, i=%d, bodies[i]=%d, lon=%f, lat=%f, dist=%f, swe_degnorm=%f", jd_ut, i,bodies[i], xret[0], xret[1], xret[3], swe_degnorm(xret[0])));
 
-        st->results[i][0] = (double)asteroids[i];      /* idplanet 0 … 9           */
+        st->results[i][0] = (double)bodies[i];      /* idplanet 0 … 9           */
         st->results[i][1] = swe_degnorm(xret[0]);  /* longitude          */
         st->results[i][2] = xret[1];              /* latitude            */
         st->results[i][3] = xret[3];              /* distance speed (AU)       */
@@ -376,6 +382,12 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     st->results[base+3][2] = 0.0;
     st->results[base+3][3] = 0.0;
 
+    //itère sur st->results[i][1} pour tous les i et affiche un ereport
+    /*for (i = 0; i < NB_RESULTS; i++) {
+	ereport(INFO, errmsg("LOG compute_positions: %d: lon=%.8f lat=%.8f dist=%.8f",
+			     (int)st->results[i][0], st->results[i][1],
+			     st->results[i][2], st->results[i][3]));
+    }*/
 
 	
 

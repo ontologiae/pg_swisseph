@@ -108,8 +108,8 @@ PG_MODULE_MAGIC;
 
 #define PERIOD_PROSERPINE   374.99706648423204722107
 #define RADIUS_PROSERPINE   pow(PERIOD_PROSERPINE, 2.0/3.0)
-#define ROT_SPEED_PROSERPINE   0.002628413515156272     /* ° par jour */
-#define JD0_PROSERPINE  2282637.2446808508     /* 0° Bélier pour Proserpine */
+#define ROT_SPEED_PROSERPINE   0.00264051506438185377 //0.002628413515156272     /* ° par jour */
+#define JD0_PROSERPINE  2284136.888390 //= 1914/12/07, 10:12:31.967985928058624h// 2420246.549375 //2282637.2446808508     /* 0° Bélier pour Proserpine */
 
 
 
@@ -144,16 +144,16 @@ static double proserpine_helio(double jd) {
 		lon = norm360( (jd - JD0_PROSERPINE) * ROT_SPEED_PROSERPINE);
 	else
 		lon = norm360( (JD0_PROSERPINE - jd) * ROT_SPEED_PROSERPINE);
-
+	ereport(INFO,errmsg("LOG proserpine_helio jd=%f ; jd0=%f ; lon=%f, norm lon=%f", jd, JD0_PROSERPINE, lon, norm360(lon) ));
 	return norm360(lon);
 }
 
-static double lambda_geo_fast(double jd, double body_lat_helio, int32 iflag_se, double body_radius ) {
+static double lambda_geo_fast(double jd, double body_lat_helio,  double body_radius ) {
 	char   serr[256];
 	double xx_earth[6];
 
 	/* Terre héliocentrique, plan de l’écliptique */
-	swe_calc(jd, SE_EARTH, iflag_se | SEFLG_HELCTR  | SEFLG_SWIEPH, xx_earth, serr);
+	swe_calc(jd, SE_EARTH, SEFLG_SWIEPH | SEFLG_SPEED | SEFLG_HELCTR  | SEFLG_SWIEPH, xx_earth, serr);
 
 	double lambda_earth = norm360(xx_earth[0]);      /* degrés       */
 
@@ -166,7 +166,7 @@ static double lambda_geo_fast(double jd, double body_lat_helio, int32 iflag_se, 
 
 	double lam_g = atan2(y, x) / D2R;
 	if (lam_g < 0) lam_g += 360.0;
-	ereport(INFO,errmsg("LOG lambda_geo_fast lambda_earth=%f ;  jd=%f ; lambda_helio=%f ; geocentric=%f",lambda_earth, jd, body_lat_helio, lam_g ));
+	ereport(INFO,errmsg("LOG lambda_geo_fast lambda_earth=%f ;  jd=%f ; lambda_helio=%f ; geocentric=%f;",lambda_earth, jd, body_lat_helio, lam_g ));
 
 
 	return lam_g;          /* longitude géocentrique (°) */
@@ -348,9 +348,9 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     //Bacchus
     iflag = SEFLG_SWIEPH | SEFLG_SPEED;   // vous pouvez ajouter  
                                             // SEFLG_NONUT, etc.    
-    double lon_bacchus = lambda_geo_fast(jd_ut, bacchus_helio(jd_ut), iflag, RADIUS_BACCHUS);
-    double lon_apollon = lambda_geo_fast(jd_ut, apollon_helio(jd_ut), iflag, RADIUS_APOLLON);
-    double lon_proserpine = lambda_geo_fast(jd_ut, proserpine_helio(jd_ut), iflag, RADIUS_PROSERPINE);
+    double lon_bacchus = lambda_geo_fast(jd_ut, bacchus_helio(jd_ut),  RADIUS_BACCHUS);
+    double lon_apollon = lambda_geo_fast(jd_ut, apollon_helio(jd_ut),  RADIUS_APOLLON);
+    double lon_proserpine = lambda_geo_fast(jd_ut, proserpine_helio(jd_ut),  RADIUS_PROSERPINE);
 
     //int asteroids2[3] = {25, 26, 27};// Bacchus, apollon, proserpine
 

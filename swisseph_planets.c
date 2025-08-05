@@ -38,17 +38,20 @@ PG_MODULE_MAGIC;
 /* ------------------------------------------------------------------ */
 /*  Constantes internes                                               */
 /* ------------------------------------------------------------------ */
-#define N_PLANETS    21        /* Sun … Pluto (SwissEph 0–9)     */
-#define N_URANIAN  9         /* Ceres, Pallas, Juno, Vesta, Chiron, Pholus, Varuna, Orcus, Haumea */
-#define N_ASTEROIDS 3         /* 40–48 (SwissEph 40–48)        */
+
+
 #define N_ANGULAR     4         /* ASC, DSC, MC, IC               */
-#define NB_RESULTS   (N_PLANETS + N_ANGULAR + N_URANIAN + N_ASTEROIDS) -4
+#define N_ASTEROIDS 3         /* Proserpine, Apollon, Bacchus      */
+#define BODIES_COUNT 32
+#define PARTS_COUNT  1 // "Part du monde"
+#define NB_RESULTS   (BODIES_COUNT + N_ANGULAR  + N_ASTEROIDS+ PARTS_COUNT) /* nb de résultats retournés par appel, et donc taille du tablea de la structure renvoyée*/
 
 /* Identifiants arbitraires (> 10000) pour les angles */
 #define ID_ASC 10001
 #define ID_DSC 10002
 #define ID_MC  10003
 #define ID_IC  10004
+#define ID_PART 10005 // Part du monde
 
 
 /*
@@ -111,7 +114,7 @@ PG_MODULE_MAGIC;
 #define ROT_SPEED_PROSERPINE   0.00264051506438185377 //0.002628413515156272     /* ° par jour */
 #define JD0_PROSERPINE  2284136.888390 //= 1914/12/07, 10:12:31.967985928058624h// 2420246.549375 //2282637.2446808508     /* 0° Bélier pour Proserpine */
 
-
+// Calculs pour Apollon, Proserpine/Koré, Bacchus
 
 static double norm360(double a) {
 	a = fmod(a, 360.0);
@@ -253,7 +256,7 @@ static double timestamp_to_jdut(TimestampTz ts) {
 		    tm.tm_hour, tm.tm_min,
                         (double)tm.tm_sec + (double)fsec/1000000.0,
                         SE_GREG_CAL, dret, serr);
-    ereport(INFO,errmsg("LOG swe_utc_to_jd : %f", dret[1]));
+    //ereport(INFO,errmsg("LOG swe_utc_to_jd : %f", dret[1]));
     if (ret == ERR)
 	    ereport(ERROR,
             (errmsg("swe_utc_to_jd failed: %s", serr)));
@@ -262,7 +265,6 @@ static double timestamp_to_jdut(TimestampTz ts) {
     return jd_ut;
 }
 
-#define BODIES_COUNT 24
 /* ------------------------------------------------------------------ */
 /*  Pré-calcul de toutes les positions pour un appel                  */
 /* ------------------------------------------------------------------ */
@@ -272,16 +274,32 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     int32  iflag = SEFLG_SWIEPH | SEFLG_SPEED | SEFLG_TOPOCTR ;    /* éphémerides suisses, vitesses */
 
     char serr[AS_MAXCH];          /* buffer erreur SwissEph */
+    float moon, sun;
 
     int bodies[BODIES_COUNT] = {
-	    SE_SUN,SE_MOON,SE_MARS,SE_MERCURY,SE_JUPITER,SE_VENUS,SE_SATURN,SE_URANUS,SE_NEPTUNE,SE_PLUTO
-		    ,SE_VESTA,SE_VARUNA
+	    SE_SUN,SE_MOON,SE_MARS,SE_MERCURY,SE_JUPITER,SE_VENUS,SE_SATURN,SE_URANUS,SE_NEPTUNE,SE_PLUTO // 10 with moon
+		,SE_VESTA,SE_VARUNA
 		,SE_VULCAN,SE_CHIRON
-		,SE_CERES,SE_JUNO,SE_MEAN_APOG,SE_PHOLUS,SE_PALLAS,SE_POSEIDON
-		,SE_MEAN_NODE, SE_TRUE_NODE
-		,SE_AST_OFFSET + 136199 // Eris 
+		,SE_CERES,SE_JUNO,SE_MEAN_APOG,SE_PHOLUS,SE_PALLAS,SE_POSEIDON // 6
+		,SE_MEAN_NODE, SE_TRUE_NODE // 2
+		,SE_AST_OFFSET + 136199 // Eris
+		, SE_AST_OFFSET + 90377 // Sedna
+		, SE_AST_OFFSET + 20000 // Varuna
+		//, SE_AST_OFFSET + 2063 // Bacchus
+		//, SE_AST_OFFSET + 2060 // Apollon
+		//, SE_AST_OFFSET + 311999 // Koré
+		, SE_AST_OFFSET + 136108 // Haumea
+		, SE_AST_OFFSET + 90482 // Orcus
+		, SE_AST_OFFSET + 50000 // Quaoar
+		, SE_AST_OFFSET + 28978 // Ixion
+		, SE_AST_OFFSET + 136472 // Makemake
+		, SE_AST_OFFSET +  16 // Psyché
+		, SE_AST_OFFSET +  7066 //Nessus
+				       //
+					// TODO : AMOR, SEDNA, Haumea, Vesta, Isis, Nessus,  Quaoar, Ixion,  Psyché, Poseidon
+					// MakeMake, Orcus, Haumea,  
     };
-    
+   //Changer le makefile pour qu'il charge les fichiers se1 dans le répertoire ephe qu'on définira et modif le source C pour mettre le bon PATH 
 
 
     swe_set_topo(lon_deg, lat_deg, 0.0); /* position géographique pour les calculs, au niveau de la mer */
@@ -295,6 +313,8 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 
         st->results[i][0] = (double)bodies[i];      /* idplanet 0 … 9           */
         st->results[i][1] = swe_degnorm(xret[0]);  /* longitude          */
+	if (bodies[i] == SE_MOON) moon = xret[0]; 
+	if (bodies[i] == SE_SUN) sun = xret[0]; 
         st->results[i][2] = xret[1];              /* latitude            */
         st->results[i][3] = xret[3];              /* distance speed (AU)       */
     }
@@ -314,8 +334,13 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     /* 2) Ascendant / MC ---------------------------------------------- */
     double cusps[13];      /* non utilisé ici, mais requis       */
     double ascmc[10];
-    if (swe_houses_ex(jd_ut, iflag, lat_deg, lon_deg, 'P', cusps, ascmc) == ERR)
-        ereport(ERROR, (errmsg("swe_houses_ex failed")));
+    double cusp_speed[13];
+    double ascmc_speed[10];
+    if (swe_houses_ex2(jd_ut, iflag, lat_deg, lon_deg, 'R', cusps, ascmc, cusp_speed, ascmc_speed, serr) == ERR) {
+        ereport(INFO, (errmsg("swe_houses_ex failed lat=%f, lon=%f", lat_deg, lon_deg)));
+	//ascmc[SE_ASC] = 0;
+	//ascmc[SE_MC] = 0; 
+    }
 
 
 
@@ -326,7 +351,7 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     double dsc = swe_degnorm(asc + 180.0);
     double ic  = swe_degnorm(mc  + 180.0);
 
-    int base = N_PLANETS;// + 30 car on a les astéroides 40–48
+    int base = BODIES_COUNT;// + 30 car on a les astéroides 40–48
     /* ASC */
     st->results[base+0][0] = ID_ASC;
     st->results[base+0][1] = asc;
@@ -350,6 +375,14 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     st->results[base+3][1] = ic;
     st->results[base+3][2] = 0.0;
     st->results[base+3][3] = 0.0;
+
+
+    //Part du monde
+    st->results[base+4][0] = ID_PART;
+    st->results[base+4][1] = swe_degnorm(sun - moon);
+    st->results[base+4][2] = 0.0;
+    st->results[base+4][3] = 0.0;
+
 
     //Bacchus
     iflag = SEFLG_SWIEPH | SEFLG_SPEED;   // vous pouvez ajouter  
@@ -422,7 +455,7 @@ Datum sw_planet_positions(PG_FUNCTION_ARGS) {
         double lat_deg = PG_GETARG_FLOAT8(1);
         double lon_deg = PG_GETARG_FLOAT8(2);
 
-        swe_set_ephe_path("/usr/share/libswe/ephe");   /* path paquet Debian */
+        swe_set_ephe_path(SE_EPHE_PATH);   /* path paquet Debian */
 
         compute_positions(st, lat_deg, lon_deg);
 

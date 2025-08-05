@@ -81,10 +81,20 @@ BEGIN
 	(10002,'Descendant'),
 	(10003,'Medium Coeli'),
 	(10004,'Imum Coeli'),
+	(10005,'Part du monde'),
 	(30000,'Varuna'),
+	(17066,'Nessus'),
+	(90482+10000,'Orcus'),--SE_AST_OFFSET + asteroid international code
+	(10000+29748,'Ixion'),
+	(10000+136199,'Eris'),
+	(10000+90377,'Sedna'),
+	(10000+136108,'Haumea'),
+	(10000+136472,'Makemake'),
+	(10000+50000,'Quaoar'),
+	(10000+28978,'Ixion'),	
+	(10000+16,'Psyché'),
 	(55,'Vulcan'),
-	(47,'Poseidon'),
-	(146199,'Eris')
+	(47,'Poseidon')
 )
 SELECT s.lib
 FROM bodies s

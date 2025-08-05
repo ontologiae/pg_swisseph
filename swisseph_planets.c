@@ -271,7 +271,7 @@ static double timestamp_to_jdut(TimestampTz ts) {
 static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     int i;
     double jd_ut = timestamp_to_jdut(st->ts);
-    int32  iflag = SEFLG_SWIEPH | SEFLG_SPEED | SEFLG_TOPOCTR ;    /* éphémerides suisses, vitesses */
+    int32  iflag = SEFLG_JPLEPH | SEFLG_SPEED | SEFLG_TOPOCTR ;    /* éphémerides suisses, vitesses */
 
     char serr[AS_MAXCH];          /* buffer erreur SwissEph */
     float moon, sun;
@@ -379,7 +379,7 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 
     //Part du monde
     st->results[base+4][0] = ID_PART;
-    st->results[base+4][1] = swe_degnorm(sun - moon);
+    st->results[base+4][1] = swe_degnorm( moon -sun);
     st->results[base+4][2] = 0.0;
     st->results[base+4][3] = 0.0;
 

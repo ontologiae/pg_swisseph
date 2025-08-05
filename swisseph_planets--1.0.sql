@@ -47,7 +47,6 @@ BEGIN
     RETURN QUERY
     WITH bodies(id, lib) AS (
         VALUES
-	(11, 'Poisson'),
 	(1, 'Moon'),
 	(0,'Sun'),
 	(2,'Mercury'),       

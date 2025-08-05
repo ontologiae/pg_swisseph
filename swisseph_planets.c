@@ -285,9 +285,6 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 		,SE_AST_OFFSET + 136199 // Eris
 		, SE_AST_OFFSET + 90377 // Sedna
 		, SE_AST_OFFSET + 20000 // Varuna
-		//, SE_AST_OFFSET + 2063 // Bacchus
-		//, SE_AST_OFFSET + 2060 // Apollon
-		//, SE_AST_OFFSET + 311999 // Koré
 		, SE_AST_OFFSET + 136108 // Haumea
 		, SE_AST_OFFSET + 90482 // Orcus
 		, SE_AST_OFFSET + 50000 // Quaoar
@@ -318,18 +315,6 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
         st->results[i][2] = xret[1];              /* latitude            */
         st->results[i][3] = xret[3];              /* distance speed (AU)       */
     }
-
-/*   for (i = 0; i < 11  ; i++) { // Astéroides 40–48
-    
-        double xret[6];
-        if (swe_calc_ut(jd_ut, i, iflag, xret, serr) == ERR)
-            ereport(ERROR, (errmsg("we_calc_ut error: %s", serr)));
-        st->results[i][0] = (double)asteroids[i];      // idplanet 21 .. 29           
-        st->results[i][1] = swe_degnorm(xret[0]);  // longitude          
-        st->results[i][2] = xret[1];              // latitude            
-        st->results[i][3] = xret[3];              // distance speed (AU)       
-    }
-*/
 
     /* 2) Ascendant / MC ---------------------------------------------- */
     double cusps[13];      /* non utilisé ici, mais requis       */
@@ -394,30 +379,31 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     //int asteroids2[3] = {25, 26, 27};// Bacchus, apollon, proserpine
 
 
-    base = 24;
+    base = BODIES_COUNT;
         /* bacchus */
-    st->results[base+1][0] = 25;
-    st->results[base+1][1] = lon_bacchus;
-    st->results[base+1][2] = 0.0;
-    st->results[base+1][3] = 0.0;
+    st->results[base+5][0] = 25;
+    st->results[base+5][1] = lon_bacchus;
+    st->results[base+5][2] = 0.0;
+    st->results[base+5][3] = 0.0;
 
            /* apollon */
-    st->results[base+2][0] = 26;
-    st->results[base+2][1] = lon_apollon;
-    st->results[base+2][2] = 0.0;
-    st->results[base+2][3] = 0.0;
+    st->results[base+6][0] = 26;
+    st->results[base+6][1] = lon_apollon;
+    st->results[base+6][2] = 0.0;
+    st->results[base+6][3] = 0.0;
 
 
     /* proserpine */
 
-    st->results[base+3][0] = 27;
-    st->results[base+3][1] = lon_proserpine;
-    st->results[base+3][2] = 0.0;
-    st->results[base+3][3] = 0.0;
+    st->results[base+7][0] = 27;
+    st->results[base+7][1] = lon_proserpine;
+    st->results[base+7][2] = 0.0;
+    st->results[base+7][3] = 0.0;
 
     //itère sur st->results[i][1} pour tous les i et affiche un ereport
-    /*for (i = 0; i < NB_RESULTS; i++) {
-	ereport(INFO, errmsg("LOG compute_positions: %d: lon=%.8f lat=%.8f dist=%.8f",
+    //DEBUG
+   /*for (i = 0; i < NB_RESULTS; i++) {
+	ereport(INFO, errmsg("LOG index:%d compute_positions: %d: lon=%.8f lat=%.8f dist=%.8f", i,
 			     (int)st->results[i][0], st->results[i][1],
 			     st->results[i][2], st->results[i][3]));
     }*/

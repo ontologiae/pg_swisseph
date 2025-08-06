@@ -227,7 +227,7 @@ typedef struct
 	int32   nrows;             /* = NB_RESULTS                    */
 	int32   current;           /* index courant 0…nrows-1         */
 
-	double  results[NB_RESULTS][4];
+	double  results[NB_RESULTS][5];
 	/* [i][0] = idplanet
 	   [i][1] = lon (deg)
 	   [i][2] = lat (deg)
@@ -274,7 +274,7 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     int32  iflag = SEFLG_JPLEPH | SEFLG_SPEED | SEFLG_TOPOCTR ;    /* éphémerides suisses, vitesses */
 
     char serr[AS_MAXCH];          /* buffer erreur SwissEph */
-    float moon, sun;
+    float moon = 0.0, sun = 0.0;
 
     int bodies[BODIES_COUNT] = {
 	    SE_SUN,SE_MOON,SE_MARS,SE_MERCURY,SE_JUPITER,SE_VENUS,SE_SATURN,SE_URANUS,SE_NEPTUNE,SE_PLUTO // 10 with moon
@@ -314,6 +314,7 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 	if (bodies[i] == SE_SUN) sun = xret[0]; 
         st->results[i][2] = xret[1];              /* latitude            */
         st->results[i][3] = xret[3];              /* distance speed (AU)       */
+	st->results[i][4] = xret[2];
     }
 
     /* 2) Ascendant / MC ---------------------------------------------- */
@@ -342,24 +343,28 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     st->results[base+0][1] = asc;
     st->results[base+0][2] = 0.0;
     st->results[base+0][3] = 0.0;
+    st->results[base+0][4] = 0.0;
 
     /* DSC */
     st->results[base+1][0] = ID_DSC;
     st->results[base+1][1] = dsc;
     st->results[base+1][2] = 0.0;
     st->results[base+1][3] = 0.0;
+    st->results[base+1][4] = 0.0;
 
     /* MC */	
     st->results[base+2][0] = ID_MC;
     st->results[base+2][1] = mc;
     st->results[base+2][2] = 0.0;
     st->results[base+2][3] = 0.0;
+    st->results[base+2][4] = 0.0;
 
     /* IC */
     st->results[base+3][0] = ID_IC;
     st->results[base+3][1] = ic;
     st->results[base+3][2] = 0.0;
     st->results[base+3][3] = 0.0;
+    st->results[base+3][4] = 0.0;
 
 
     //Part du monde
@@ -367,6 +372,7 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     st->results[base+4][1] = swe_degnorm( moon -sun);
     st->results[base+4][2] = 0.0;
     st->results[base+4][3] = 0.0;
+    st->results[base+4][4] = 0.0;
 
 
     //Bacchus
@@ -385,12 +391,14 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     st->results[base+5][1] = lon_bacchus;
     st->results[base+5][2] = 0.0;
     st->results[base+5][3] = 0.0;
+    st->results[base+5][4] = RADIUS_BACCHUS;
 
            /* apollon */
     st->results[base+6][0] = 26;
     st->results[base+6][1] = lon_apollon;
     st->results[base+6][2] = 0.0;
     st->results[base+6][3] = 0.0;
+    st->results[base+6][4] = RADIUS_APOLLON;
 
 
     /* proserpine */
@@ -399,7 +407,7 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     st->results[base+7][1] = lon_proserpine;
     st->results[base+7][2] = 0.0;
     st->results[base+7][3] = 0.0;
-
+    st->results[base+7][4] = RADIUS_PROSERPINE;
     //itère sur st->results[i][1} pour tous les i et affiche un ereport
     //DEBUG
    /*for (i = 0; i < NB_RESULTS; i++) {
@@ -449,7 +457,7 @@ Datum sw_planet_positions(PG_FUNCTION_ARGS) {
 
         /* description du tuple retourné (5 colonnes) */
         TupleDesc tupledesc;
-        tupledesc = CreateTemplateTupleDesc(5);
+        tupledesc = CreateTemplateTupleDesc(6);
         TupleDescInitEntry(tupledesc, (AttrNumber)1, "ts",
                            TIMESTAMPTZOID, -1, 0);
         TupleDescInitEntry(tupledesc, (AttrNumber)2, "idplanet",
@@ -460,6 +468,9 @@ Datum sw_planet_positions(PG_FUNCTION_ARGS) {
                            FLOAT8OID, -1, 0);
         TupleDescInitEntry(tupledesc, (AttrNumber)5, "distspeed",
                            FLOAT8OID, -1, 0);
+	TupleDescInitEntry(tupledesc, (AttrNumber)6, "dist",
+			FLOAT8OID, -1, 0);
+
 
         funcctx->tuple_desc = BlessTupleDesc(tupledesc);
 
@@ -471,14 +482,15 @@ Datum sw_planet_positions(PG_FUNCTION_ARGS) {
     st      = (calc_state *) funcctx->user_fctx;
 
     if (st->current < st->nrows) {
-        Datum       values[5];
-        bool        nulls[5] = {false,false,false,false,false};
+        Datum       values[6];
+        bool        nulls[6] = {false,false,false,false,false,false};
 
         values[0] = TimestampGetDatum(st->ts);
         values[1] = Int32GetDatum((int32) st->results[st->current][0]);
         values[2] = Float8GetDatum(st->results[st->current][1]);
         values[3] = Float8GetDatum(st->results[st->current][2]);
         values[4] = Float8GetDatum(st->results[st->current][3]);
+	values[5] = Float8GetDatum(st->results[st->current][4]);
 
         HeapTuple   tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
         st->current++;

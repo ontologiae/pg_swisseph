@@ -8,7 +8,8 @@ RETURNS TABLE (
           idplanet  integer,
           lon       double precision,
           lat       double precision,
-          dist      double precision)
+          distspeed double precision,
+	  dist 	    double precision)
 AS 'MODULE_PATHNAME', 'sw_planet_positions'
 LANGUAGE C
 STRICT
@@ -39,6 +40,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
+Create type sensi as Enum('Direct', 'Retrograde', 'Stationnary');
+
+/*CREATE OR REPLACE FUNCTION get_sensi(speed FLOAT)
+RETURNS sensi AS $$
+BEGIN
+	CASE WHEN 
+END;
+
+
+Mercury 	300
+Venus 	300
+Mars 	90
+Jupiter 	60
+Saturn 	60
+Chiron 	20
+Uranus 	20
+Neptune 	10
+Pluto 	10*/
 
 
 CREATE OR REPLACE FUNCTION get_body_name(bodyid INTEGER)

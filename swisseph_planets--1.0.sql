@@ -43,13 +43,16 @@ $$ LANGUAGE plpgsql;
 
 Create type sensi as Enum('Direct', 'Retrograde', 'Stationnary');
 
-/*CREATE OR REPLACE FUNCTION get_sensi(speed FLOAT)
+CREATE OR REPLACE FUNCTION get_sensi(speed FLOAT)
 RETURNS sensi AS $$
 BEGIN
-	CASE WHEN 
+	If trunc(speed::numeric,5) = 0 Then Return 'Stationnary'; End If;	
+	IF speed > 0 THEN RETURN 'Direct'; Else Return 'Retrograde'; END IF;
+	--We'll see next time to evaluates when it is considered stationnary
 END;
+$$ LANGUAGE plpgsql;
 
-
+/*
 Mercury 	300
 Venus 	300
 Mars 	90

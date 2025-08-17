@@ -44,7 +44,8 @@ PG_MODULE_MAGIC;
 #define N_ASTEROIDS 3         /* Proserpine, Apollon, Bacchus      */
 #define BODIES_COUNT 32
 #define PARTS_COUNT  1 // "Part du monde"
-#define NB_RESULTS   (BODIES_COUNT + N_ANGULAR  + N_ASTEROIDS+ PARTS_COUNT) /* nb de résultats retournés par appel, et donc taille du tablea de la structure renvoyée*/
+#define HOUSES_COUNT 12
+#define NB_RESULTS   (BODIES_COUNT + N_ANGULAR  + N_ASTEROIDS+ PARTS_COUNT + HOUSES_COUNT) /* nb de résultats retournés par appel, et donc taille du tablea de la structure renvoyée*/
 
 /* Identifiants arbitraires (> 10000) pour les angles */
 #define ID_ASC 10001
@@ -52,6 +53,7 @@ PG_MODULE_MAGIC;
 #define ID_MC  10003
 #define ID_IC  10004
 #define ID_PART 10005 // Part du monde
+#define HOUSE0 10020 // Maison 0
 
 
 /*
@@ -318,6 +320,7 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     }
 
     /* 2) Ascendant / MC ---------------------------------------------- */
+    //TODO : rajouter les maisons, un jour
     double cusps[13];      /* non utilisé ici, mais requis       */
     double ascmc[10];
     double cusp_speed[13];
@@ -415,10 +418,66 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 			     (int)st->results[i][0], st->results[i][1],
 			     st->results[i][2], st->results[i][3]));
     }*/
+    for(i = 1 ; i < HOUSES_COUNT+1 ; i++) {
+	    st->results[base+7+i][0] = HOUSE0+i;
+	    st->results[base+7+i][1] = cusps[i];
+	    st->results[base+7+i][2] = 0.0;
+	    st->results[base+7+i][3] = 0.0;
+
+
+    }
 
 	
 
 }
+
+//Fonction find_bodies_conjunction. Cette fonction prend 2 arguments encodant le corps céleste au sens de swisseph, une date de début, une date de fin, une latitude, une longitude.
+//Le problème est de trouver le moment exact, dans la plage de temps définie entre début et fin, où les deux corps se trouvent au même endroit, en géocentrique, sur la latitude/longitude définie
+// La fonction calcul d'abord, pour chaque corps, le nombre de jours nécessaire pour faire 5°. On prend le pas minimum pour les deux corps
+// Une première boucle cherche le moment où l'angle est le minimum entre les 2.
+// Le second algorithme va affiner, à la seconde près le moment exact
+static double find_bodies_conjunction(double lat_deg, double lon_deg, int body1, int body2, double begindate, double enddate) {
+	//Calcul du nombre de jour nécessaire pour faire 5° pour le corps 1
+	int32  iflag = SEFLG_JPLEPH | SEFLG_SPEED | SEFLG_TOPOCTR ;    /* éphémerides suisses, vitesses */
+	double xret[6];
+	char serr[AS_MAXCH];          /* buffer erreur SwissEph */
+	swe_set_topo(lon_deg, lat_deg, 0.0); /* position géographique pour les calculs, au niveau de la mer */
+
+	
+
+	float pos1, pos2;
+	if (swe_calc_ut(begindate, body1, iflag, xret, serr) == ERR)
+		ereport(ERROR, (errmsg("we_calc_ut error: %s", serr)));
+	pos1 = xret[0];
+	if (swe_calc_ut(begindate+1.0, body1, iflag, xret, serr) == ERR)
+		ereport(ERROR, (errmsg("we_calc_ut error: %s", serr)));
+	pos2 = xret[0];
+
+	double days_by_degree_body1 = 1.0/swe_degnorm(pos2-pos1);
+
+	if (swe_calc_ut(begindate, body2, iflag, xret, serr) == ERR)
+		ereport(ERROR, (errmsg("we_calc_ut error: %s", serr)));
+	pos1 = xret[0];
+	if (swe_calc_ut(begindate+1.0, body2, iflag, xret, serr) == ERR)
+		ereport(ERROR, (errmsg("we_calc_ut error: %s", serr)));
+	pos2 = xret[0];
+
+	double days_by_degree_body2 = 1.0/swe_degnorm(pos2-pos1);
+
+	double days_by_degree_min   = days_by_degree_body2 >= days_by_degree_body1 ? days_by_degree_body1 : days_by_degree_body2;
+
+
+
+	// On fait un for pour itérer sur days_by_degree_min entre begindate et enddate
+	// On calcul l'angle et on cherche l'angle minimum, associé à la bonne date
+	// Attention à bien gérer le avant/après
+	
+	// On a trouvé cette date, on avance d'1 seconde jusqu'à trouver la bonne
+
+	return 0.0;
+
+}
+
 
 /* ------------------------------------------------------------------ */
 /*  Fonction SRF visible depuis SQL                                   */
@@ -426,11 +485,11 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 PG_FUNCTION_INFO_V1(sw_planet_positions);
 
 Datum sw_planet_positions(PG_FUNCTION_ARGS) {
-    FuncCallContext   *funcctx;
-    calc_state        *st;
+	FuncCallContext   *funcctx;
+	calc_state        *st;
 
-    /* première entrée ------------------------------------------------ */
-    if (SRF_IS_FIRSTCALL()) {
+	/* première entrée ------------------------------------------------ */
+	if (SRF_IS_FIRSTCALL()) {
         MemoryContext   oldcontext;
 
         /* vérification des arguments */

@@ -43,7 +43,7 @@ PG_MODULE_MAGIC;
 #define N_ANGULAR     4         /* ASC, DSC, MC, IC               */
 #define N_ASTEROIDS 3         /* Proserpine, Apollon, Bacchus      */
 #define BODIES_COUNT 35
-#define PARTS_COUNT  1 // "Part du monde"
+#define PARTS_COUNT  2 // "Part du monde"
 #define HOUSES_COUNT 12
 #define NB_RESULTS   (BODIES_COUNT + N_ANGULAR  + N_ASTEROIDS+ PARTS_COUNT + HOUSES_COUNT) /* nb de résultats retournés par appel, et donc taille du tablea de la structure renvoyée*/
 
@@ -53,6 +53,7 @@ PG_MODULE_MAGIC;
 #define ID_MC  10003
 #define ID_IC  10004
 #define ID_PART 10005 // Part du monde
+#define ID_PART_FORTUNE 10006 // Part de fortune
 #define HOUSE0 10020 // Maison 0
 
 
@@ -255,7 +256,7 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 		, SE_AST_OFFSET +  7066 //Nessus
 		, SE_AST_OFFSET +  1221 // Amor
 		, SE_AST_OFFSET +  433 // Eros
-		, SE_AST_OFFSET +  42 // Isis
+		, SE_AST_OFFSET +  15760 // Isis en AUM
 				       //
 					// TODO : Eros, AMOR, Soleil noir, Noeud SUD !, Part de fortune, Eve (??), pg (???),  Isis
 					//
@@ -345,6 +346,15 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     st->results[base+4][4] = 0.0;
 
 
+    //Part de fortune
+    st->results[base+8][0] = ID_PART_FORTUNE; // HACK !!!
+    st->results[base+8][1] = swe_degnorm( asc + moon - sun);
+    st->results[base+8][2] = 0.0;
+    st->results[base+8][3] = 0.0;
+    st->results[base+8][4] = 0.0;
+
+
+
     //Bacchus
     iflag = SEFLG_SWIEPH | SEFLG_SPEED;   // vous pouvez ajouter  
                                             // SEFLG_NONUT, etc.    
@@ -386,10 +396,10 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 			     st->results[i][2], st->results[i][3]));
     }*/
     for(i = 1 ; i < HOUSES_COUNT+1 ; i++) {
-	    st->results[base+7+i][0] = HOUSE0+i;
-	    st->results[base+7+i][1] = cusps[i];
-	    st->results[base+7+i][2] = 0.0;
-	    st->results[base+7+i][3] = 0.0;
+	    st->results[base+8+i][0] = HOUSE0+i;
+	    st->results[base+8+i][1] = cusps[i];
+	    st->results[base+8+i][2] = 0.0;
+	    st->results[base+8+i][3] = 0.0;
 
 
     }

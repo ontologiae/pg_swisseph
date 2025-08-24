@@ -104,6 +104,7 @@ BEGIN
 	(10003,'Medium Coeli'),
 	(10004,'Imum Coeli'),
 	(10005,'Part du monde'),
+	(10006,'Part de fortune'),
 	(10022,'House 2'),
 	(10023,'House 3'),
 	(10024,'House 4'),
@@ -128,7 +129,7 @@ BEGIN
 	(10000+16,'Psyché'),
 	(10000+1221,'Amor'),
 	(10000+433,'Eros'),
-	(10000+42,'Isis'),
+	(10000+15760,'Isis'),
 	(55,'Vulcan'),
 	(47,'Poseidon')
 )

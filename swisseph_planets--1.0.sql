@@ -82,7 +82,7 @@ BEGIN
 	(9,'Pluto'),       
 	(10,'Mean_node'),      
 	(11,'True_node'),
-	(12,'Mean_apog'),      
+	(12,'South Node'),      
 	(13,'Oscu_apog'),    
 	(14,'Earth'),      
 	(15,'Chiron'),      

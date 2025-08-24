@@ -43,9 +43,9 @@ PG_MODULE_MAGIC;
 #define N_ANGULAR     4         /* ASC, DSC, MC, IC               */
 #define N_ASTEROIDS 3         /* Proserpine, Apollon, Bacchus      */
 #define BODIES_COUNT 35
-#define PARTS_COUNT  2 // "Part du monde"
+#define PARTS_COUNT  3 // "Part du monde" + noeud sud + Part de fortune
 #define HOUSES_COUNT 12
-#define NB_RESULTS   (BODIES_COUNT + N_ANGULAR  + N_ASTEROIDS+ PARTS_COUNT + HOUSES_COUNT) /* nb de résultats retournés par appel, et donc taille du tablea de la structure renvoyée*/
+#define NB_RESULTS   (BODIES_COUNT + N_ANGULAR  + N_ASTEROIDS + PARTS_COUNT + HOUSES_COUNT) /* nb de résultats retournés par appel, et donc taille du tablea de la structure renvoyée*/
 
 /* Identifiants arbitraires (> 10000) pour les angles */
 #define ID_ASC 10001
@@ -54,6 +54,7 @@ PG_MODULE_MAGIC;
 #define ID_IC  10004
 #define ID_PART 10005 // Part du monde
 #define ID_PART_FORTUNE 10006 // Part de fortune
+#define ID_TRUE_NODE_SOUTH 12 // Noeuds sud
 #define HOUSE0 10020 // Maison 0
 
 
@@ -236,7 +237,7 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     int32  iflag = SEFLG_JPLEPH | SEFLG_SPEED | SEFLG_TOPOCTR ;    /* éphémerides suisses, vitesses */
 
     char serr[AS_MAXCH];          /* buffer erreur SwissEph */
-    float moon = 0.0, sun = 0.0;
+    float moon = 0.0, sun = 0.0, noeud_nord = 0.0, speed_north_noeud = 0.0;
 
     int bodies[BODIES_COUNT] = {
 	    SE_SUN,SE_MOON,SE_MARS,SE_MERCURY,SE_JUPITER,SE_VENUS,SE_SATURN,SE_URANUS,SE_NEPTUNE,SE_PLUTO // 10 with moon
@@ -282,6 +283,10 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
         st->results[i][1] = swe_degnorm(xret[0]);  /* longitude          */
 	if (bodies[i] == SE_MOON) moon = xret[0]; 
 	if (bodies[i] == SE_SUN) sun = xret[0]; 
+	if (bodies[i] == SE_TRUE_NODE) {
+		noeud_nord = xret[0]; // Noeud nord
+		speed_north_noeud = xret[3]; // vitesse du noeud nord	
+	}
         st->results[i][2] = xret[1];              /* latitude            */
         st->results[i][3] = xret[3];              /* distance speed (AU)       */
 	st->results[i][4] = xret[2];
@@ -353,6 +358,13 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     st->results[base+8][3] = 0.0;
     st->results[base+8][4] = 0.0;
 
+    //Noeud sud
+    st->results[base+9][0] = ID_TRUE_NODE_SOUTH; 
+    st->results[base+9][1] = swe_degnorm( noeud_nord + 180.0);
+    st->results[base+9][2] = 0.0;
+    st->results[base+9][3] = speed_north_noeud; // vitesse du noeud nord
+    st->results[base+9][4] = 0.0;
+
 
 
     //Bacchus
@@ -382,7 +394,6 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 
 
     /* proserpine */
-
     st->results[base+7][0] = 27;
     st->results[base+7][1] = lon_proserpine;
     st->results[base+7][2] = 0.0;
@@ -396,10 +407,10 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 			     st->results[i][2], st->results[i][3]));
     }*/
     for(i = 1 ; i < HOUSES_COUNT+1 ; i++) {
-	    st->results[base+8+i][0] = HOUSE0+i;
-	    st->results[base+8+i][1] = cusps[i];
-	    st->results[base+8+i][2] = 0.0;
-	    st->results[base+8+i][3] = 0.0;
+	    st->results[base+9+i][0] = HOUSE0+i;
+	    st->results[base+9+i][1] = cusps[i];
+	    st->results[base+9+i][2] = 0.0;
+	    st->results[base+9+i][3] = 0.0;
 
 
     }

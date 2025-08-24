@@ -42,7 +42,7 @@ PG_MODULE_MAGIC;
 
 #define N_ANGULAR     4         /* ASC, DSC, MC, IC               */
 #define N_ASTEROIDS 3         /* Proserpine, Apollon, Bacchus      */
-#define BODIES_COUNT 32
+#define BODIES_COUNT 35
 #define PARTS_COUNT  1 // "Part du monde"
 #define HOUSES_COUNT 12
 #define NB_RESULTS   (BODIES_COUNT + N_ANGULAR  + N_ASTEROIDS+ PARTS_COUNT + HOUSES_COUNT) /* nb de résultats retournés par appel, et donc taille du tablea de la structure renvoyée*/
@@ -55,47 +55,6 @@ PG_MODULE_MAGIC;
 #define ID_PART 10005 // Part du monde
 #define HOUSE0 10020 // Maison 0
 
-
-/*
-
- 
- SE_SUN          0        SE_MOON         1       
- SE_MERCURY      2        SE_VENUS        3       
- SE_MARS         4        SE_JUPITER      5       
- SE_SATURN       6        SE_URANUS       7       
- SE_NEPTUNE      8        SE_PLUTO        9       
- SE_MEAN_NODE    10       SE_TRUE_NODE    11
- SE_MEAN_APOG    12       SE_OSCU_APOG    13    
- SE_EARTH        14       SE_CHIRON       15      
- SE_PHOLUS       16       SE_CERES        17      
- SE_PALLAS       18       SE_JUNO         19      
- SE_VESTA        20       SE_INTP_APOG    21      
- SE_INTP_PERG    22     SE_NPLANETS     23      
-
- SE_PLMOON_OFFSET   9000
- SE_AST_OFFSET   10000
- SE_VARUNA   (SE_AST_OFFSET + 20000)
-
- SE_FICT_OFFSET  	40
- SE_FICT_OFFSET_1  	39
- SE_FICT_MAX  	       999 
- SE_NFICT_ELEM           15
-
- SE_COMET_OFFSET 1000
-
- SE_NALL_NAT_POINTS      (SE_NPLANETS + SE_NFICT_ELEM)
-
- SE_CUPIDO       	40  SE_HADES        	41
- SE_ZEUS         	42  SE_KRONOS       	43
- SE_APOLLON      	44  SE_ADMETOS      	45
- SE_VULKANUS     	46  SE_POSEIDON     	47
- SE_ISIS         	48  SE_NIBIRU       	49
- SE_NEPTUNE_LEVERRIER    5
- SE_NEPTUNE_ADAMS        52  SE_PLUTO_LOWELL         53
- SE_PLUTO_PICKERING      54 SE_VULCAN      		55
- SE_WHITE_MOON  	 56  SE_PROSERPINA  		57
- SE_WALDEMATH  		58
- * */
 
 
 #define YEAR_EARTH 365.2421905166
@@ -282,7 +241,7 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 	    SE_SUN,SE_MOON,SE_MARS,SE_MERCURY,SE_JUPITER,SE_VENUS,SE_SATURN,SE_URANUS,SE_NEPTUNE,SE_PLUTO // 10 with moon
 		,SE_VESTA,SE_VARUNA
 		,SE_VULCAN,SE_CHIRON
-		,SE_CERES,SE_JUNO,SE_MEAN_APOG,SE_PHOLUS,SE_PALLAS,SE_POSEIDON // 6
+		,SE_CERES,SE_JUNO,SE_MEAN_APOG,SE_PHOLUS,SE_PALLAS,SE_POSEIDON // 6 TODO TRUE APOG
 		,SE_MEAN_NODE, SE_TRUE_NODE // 2
 		,SE_AST_OFFSET + 136199 // Eris
 		, SE_AST_OFFSET + 90377 // Sedna
@@ -294,9 +253,17 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
 		, SE_AST_OFFSET + 136472 // Makemake
 		, SE_AST_OFFSET +  16 // Psyché
 		, SE_AST_OFFSET +  7066 //Nessus
+		, SE_AST_OFFSET +  1221 // Amor
+		, SE_AST_OFFSET +  433 // Eros
+		, SE_AST_OFFSET +  42 // Isis
 				       //
-					// TODO : AMOR, SEDNA, Haumea, Vesta, Isis, Nessus,  Quaoar, Ixion,  Psyché, Poseidon
-					// MakeMake, Orcus, Haumea,  
+					// TODO : Eros, AMOR, Soleil noir, Noeud SUD !, Part de fortune, Eve (??), pg (???),  Isis
+					//
+					// soleil noir il faut une autre fonction :  ret = swe_apsides(jd_start, SE_EARTH,SEFLG_ECLIPTIC | SEFLG_SPEED,xx, serr);
+      //  double peri_long = normalize_0_360(xx[0]);   /* Diamond */
+       // double apo_long  = normalize_0_360(xx[2]);   /* Black Sun */
+// 
+
     };
    //Changer le makefile pour qu'il charge les fichiers se1 dans le répertoire ephe qu'on définira et modif le source C pour mettre le bon PATH 
 
@@ -320,7 +287,7 @@ static void compute_positions(calc_state *st, double lat_deg, double lon_deg) {
     }
 
     /* 2) Ascendant / MC ---------------------------------------------- */
-    //TODO : rajouter les maisons, un jour
+    
     double cusps[13];      /* non utilisé ici, mais requis       */
     double ascmc[10];
     double cusp_speed[13];
@@ -490,73 +457,73 @@ Datum sw_planet_positions(PG_FUNCTION_ARGS) {
 
 	/* première entrée ------------------------------------------------ */
 	if (SRF_IS_FIRSTCALL()) {
-        MemoryContext   oldcontext;
+		MemoryContext   oldcontext;
 
-        /* vérification des arguments */
-        if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2))
-            ereport(ERROR, (errmsg("NULL not allowed")));
+		/* vérification des arguments */
+		if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2))
+			ereport(ERROR, (errmsg("NULL not allowed")));
 
-        funcctx = SRF_FIRSTCALL_INIT();
-        oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+		funcctx = SRF_FIRSTCALL_INIT();
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        /* -------------------- allocate / store state ---------------- */
-        st = (calc_state *) palloc0(sizeof(calc_state));
-        st->ts = PG_GETARG_TIMESTAMPTZ(0);
-        st->nrows = NB_RESULTS;
-        st->current = 0;
+		/* -------------------- allocate / store state ---------------- */
+		st = (calc_state *) palloc0(sizeof(calc_state));
+		st->ts = PG_GETARG_TIMESTAMPTZ(0);
+		st->nrows = NB_RESULTS;
+		st->current = 0;
 
-        double lat_deg = PG_GETARG_FLOAT8(1);
-        double lon_deg = PG_GETARG_FLOAT8(2);
+		double lat_deg = PG_GETARG_FLOAT8(1);
+		double lon_deg = PG_GETARG_FLOAT8(2);
 
-        swe_set_ephe_path(SE_EPHE_PATH);   /* path paquet Debian */
+		swe_set_ephe_path(SE_EPHE_PATH);   /* path paquet Debian */
 
-        compute_positions(st, lat_deg, lon_deg);
+		compute_positions(st, lat_deg, lon_deg);
 
-        funcctx->user_fctx = (void *) st;
+		funcctx->user_fctx = (void *) st;
 
-        /* description du tuple retourné (5 colonnes) */
-        TupleDesc tupledesc;
-        tupledesc = CreateTemplateTupleDesc(6);
-        TupleDescInitEntry(tupledesc, (AttrNumber)1, "ts",
-                           TIMESTAMPTZOID, -1, 0);
-        TupleDescInitEntry(tupledesc, (AttrNumber)2, "idplanet",
-                           INT4OID, -1, 0);
-        TupleDescInitEntry(tupledesc, (AttrNumber)3, "lon",
-                           FLOAT8OID, -1, 0);
-        TupleDescInitEntry(tupledesc, (AttrNumber)4, "lat",
-                           FLOAT8OID, -1, 0);
-        TupleDescInitEntry(tupledesc, (AttrNumber)5, "distspeed",
-                           FLOAT8OID, -1, 0);
-	TupleDescInitEntry(tupledesc, (AttrNumber)6, "dist",
-			FLOAT8OID, -1, 0);
+		/* description du tuple retourné (5 colonnes) */
+		TupleDesc tupledesc;
+		tupledesc = CreateTemplateTupleDesc(6);
+		TupleDescInitEntry(tupledesc, (AttrNumber)1, "ts",
+				TIMESTAMPTZOID, -1, 0);
+		TupleDescInitEntry(tupledesc, (AttrNumber)2, "idplanet",
+				INT4OID, -1, 0);
+		TupleDescInitEntry(tupledesc, (AttrNumber)3, "lon",
+				FLOAT8OID, -1, 0);
+		TupleDescInitEntry(tupledesc, (AttrNumber)4, "lat",
+				FLOAT8OID, -1, 0);
+		TupleDescInitEntry(tupledesc, (AttrNumber)5, "distspeed",
+				FLOAT8OID, -1, 0);
+		TupleDescInitEntry(tupledesc, (AttrNumber)6, "dist",
+				FLOAT8OID, -1, 0);
 
 
-        funcctx->tuple_desc = BlessTupleDesc(tupledesc);
+		funcctx->tuple_desc = BlessTupleDesc(tupledesc);
 
-        MemoryContextSwitchTo(oldcontext);
-    }
+		MemoryContextSwitchTo(oldcontext);
+	}
 
-    /* appels suivants ------------------------------------------------- */
-    funcctx = SRF_PERCALL_SETUP();
-    st      = (calc_state *) funcctx->user_fctx;
+	/* appels suivants ------------------------------------------------- */
+	funcctx = SRF_PERCALL_SETUP();
+	st      = (calc_state *) funcctx->user_fctx;
 
-    if (st->current < st->nrows) {
-        Datum       values[6];
-        bool        nulls[6] = {false,false,false,false,false,false};
+	if (st->current < st->nrows) {
+		Datum       values[6];
+		bool        nulls[6] = {false,false,false,false,false,false};
 
-        values[0] = TimestampGetDatum(st->ts);
-        values[1] = Int32GetDatum((int32) st->results[st->current][0]);
-        values[2] = Float8GetDatum(st->results[st->current][1]);
-        values[3] = Float8GetDatum(st->results[st->current][2]);
-        values[4] = Float8GetDatum(st->results[st->current][3]);
-	values[5] = Float8GetDatum(st->results[st->current][4]);
+		values[0] = TimestampGetDatum(st->ts);
+		values[1] = Int32GetDatum((int32) st->results[st->current][0]);
+		values[2] = Float8GetDatum(st->results[st->current][1]);
+		values[3] = Float8GetDatum(st->results[st->current][2]);
+		values[4] = Float8GetDatum(st->results[st->current][3]);
+		values[5] = Float8GetDatum(st->results[st->current][4]);
 
-        HeapTuple   tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
-        st->current++;
+		HeapTuple   tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
+		st->current++;
 
-        SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
-    } else {
-        SRF_RETURN_DONE(funcctx);
-    }
+		SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
+	} else {
+		SRF_RETURN_DONE(funcctx);
+	}
 }
 
